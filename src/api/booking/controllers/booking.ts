@@ -8,6 +8,11 @@ const MODEL_UID = 'api::booking.booking';
 const ORGANIZATION_MODEL_UID = 'api::organization.organization';
 const ROOM_MODEL_UID = 'api::room.room';
 const BED_MODEL_UID = 'api::bed.bed';
+const BOOKING_POPULATE = {
+	organization: {
+		fields: ['id'],
+	},
+} as const;
 
 const BOOKING_STATES = ['new', 'pending', 'confirmed', 'cancelled', 'completed'] as const;
 type BookingState = (typeof BOOKING_STATES)[number];
@@ -111,19 +116,51 @@ const enforceOrganizationFilter = (ctx: any, organizationId: number) => {
 	}
 };
 
-const ensureBookingOwnership = async (ctx: any, strapi: any, bookingId: number, organizationId: number) => {
-	const booking = await strapi.entityService.findOne(MODEL_UID, bookingId, {
-		populate: {
-			organization: {
-				fields: ['id'],
-			},
-		},
-	});
-
+const ensureBookingOwnership = (ctx: any, booking: any, organizationId: number) => {
 	if (!booking || booking.organization?.id !== organizationId) {
 		ctx.throw(403, 'Энэ захиалгад хандах эрхгүй байна.');
 	}
 
+	return booking;
+};
+
+const resolveBookingParam = async (ctx: any, strapi: any) => {
+	const rawId = ctx.params?.id;
+	if (!rawId) {
+		ctx.throw(400, 'Захиалгын ID дамжаагүй байна.');
+	}
+
+	const isNumericId = /^\d+$/.test(String(rawId));
+	if (isNumericId) {
+		const numericId = Number(rawId);
+		if (Number.isNaN(numericId)) {
+			ctx.throw(400, 'Буруу ID утга дамжуулагдсан байна.');
+		}
+		const booking = await strapi.entityService.findOne(MODEL_UID, numericId, {
+			populate: BOOKING_POPULATE,
+		});
+		if (!booking) {
+			ctx.throw(404, 'Захиалга олдсонгүй.');
+		}
+		if (booking.documentId && ctx.params.id !== booking.documentId) {
+			ctx.params.id = booking.documentId;
+		}
+		return booking;
+	}
+
+	const [booking] = await strapi.entityService.findMany(MODEL_UID, {
+		filters: { documentId: rawId },
+		populate: BOOKING_POPULATE,
+		publicationState: 'preview',
+		limit: 1,
+	});
+
+	if (!booking) {
+		ctx.throw(404, 'Захиалга олдсонгүй.');
+	}
+	if (booking.documentId && ctx.params.id !== booking.documentId) {
+		ctx.params.id = booking.documentId;
+	}
 	return booking;
 };
 
@@ -210,15 +247,6 @@ const validateBookingRelations = async (ctx: any, strapi: any, organizationId: n
 	}
 };
 
-	const parseParamId = (ctx: any): number => {
-		const rawId = ctx.params.id;
-		const parsed = Number(rawId);
-		if (Number.isNaN(parsed)) {
-			ctx.throw(400, 'Буруу ID утга дамжуулагдсан байна.');
-		}
-		return parsed;
-	};
-
 export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 	async find(ctx) {
 		const organizationId = getOrganizationId(ctx);
@@ -228,8 +256,8 @@ export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 
 	async findOne(ctx) {
 		const organizationId = getOrganizationId(ctx);
-			const bookingId = parseParamId(ctx);
-		await ensureBookingOwnership(ctx, strapi, bookingId, organizationId);
+		const booking = await resolveBookingParam(ctx, strapi);
+		ensureBookingOwnership(ctx, booking, organizationId);
 		return await super.findOne(ctx);
 	},
 
@@ -294,8 +322,8 @@ export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 
 	async update(ctx) {
 		const organizationId = getOrganizationId(ctx);
-			const bookingId = parseParamId(ctx);
-		await ensureBookingOwnership(ctx, strapi, bookingId, organizationId);
+		const booking = await resolveBookingParam(ctx, strapi);
+		ensureBookingOwnership(ctx, booking, organizationId);
 		setOrganizationOnBody(ctx, organizationId);
 		await validateBookingRelations(ctx, strapi, organizationId);
 		prepareBookingData(ctx.request.body.data);
@@ -304,8 +332,8 @@ export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 
 	async delete(ctx) {
 		const organizationId = getOrganizationId(ctx);
-			const bookingId = parseParamId(ctx);
-		await ensureBookingOwnership(ctx, strapi, bookingId, organizationId);
+		const booking = await resolveBookingParam(ctx, strapi);
+		ensureBookingOwnership(ctx, booking, organizationId);
 		return await super.delete(ctx);
 	},
 }));
