@@ -1,0 +1,29 @@
+{
+  "kind": "collectionType",
+  "collectionName": "beds",
+  "info": {
+    "singularName": "bed",
+    "pluralName": "beds",
+    "displayName": "Bed"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "no": {
+      "type": "integer",
+      "required": false
+    },
+    "room": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::room.room",
+      "inversedBy": "beds"
+    }
+  }
+}

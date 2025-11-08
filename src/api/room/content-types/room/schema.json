@@ -1,0 +1,34 @@
+{
+  "kind": "collectionType",
+  "collectionName": "rooms",
+  "info": {
+    "singularName": "room",
+    "pluralName": "rooms",
+    "displayName": "Room"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 30,
+      "required": true
+    },
+    "pricePerDay": {
+      "type": "integer",
+      "required": true
+    },
+    "priceWelfare": {
+      "type": "integer"
+    },
+    "beds": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::bed.bed",
+      "mappedBy": "room"
+    }
+  }
+}

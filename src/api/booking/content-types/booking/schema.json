@@ -1,0 +1,98 @@
+{
+  "kind": "collectionType",
+  "collectionName": "bookings",
+  "info": {
+    "singularName": "booking",
+    "pluralName": "bookings",
+    "displayName": "Booking"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "organization": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::organization.organization"
+    },
+    "firstName": {
+      "type": "string",
+      "maxLength": 40,
+      "required": true
+    },
+    "lastName": {
+      "type": "string",
+      "maxLength": 40,
+      "required": true
+    },
+    "registerNo": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 12,
+      "required": false
+    },
+    "phone": {
+      "type": "string",
+      "minLength": 6,
+      "maxLength": 20,
+      "required": true
+    },
+    "gender": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "birthday": {
+      "type": "date",
+      "required": false
+    },
+    "age": {
+      "type": "integer"
+    },
+    "room": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::room.room"
+    },
+    "bed": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::bed.bed"
+    },
+    "startDay": {
+      "type": "date",
+      "required": true
+    },
+    "endDay": {
+      "type": "date",
+      "required": true
+    },
+    "isWelfare": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "welfareCode": {
+      "type": "string",
+      "conditions": {
+        "visible": {
+          "==": [
+            {
+              "var": "isWelfare"
+            },
+            true
+          ]
+        }
+      }
+    },
+    "pricePerDay": {
+      "type": "integer",
+      "required": true
+    },
+    "priceTotal": {
+      "type": "integer",
+      "required": true
+    }
+  }
+}
