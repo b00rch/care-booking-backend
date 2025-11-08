@@ -5,6 +5,7 @@
 import { factories } from '@strapi/strapi';
 
 const MODEL_UID = 'api::booking.booking';
+const ORGANIZATION_MODEL_UID = 'api::organization.organization';
 const ROOM_MODEL_UID = 'api::room.room';
 const BED_MODEL_UID = 'api::bed.bed';
 
@@ -110,6 +111,18 @@ const ensureBedOwnership = async (ctx: any, strapi: any, bedId: number, organiza
 	return bed;
 };
 
+const ensureOrganizationExists = async (ctx: any, strapi: any, organizationId: number) => {
+	const organization = await strapi.entityService.findOne(ORGANIZATION_MODEL_UID, organizationId, {
+		fields: ['id'],
+	});
+
+	if (!organization) {
+		ctx.throw(404, 'Сонгосон байгууллага олдсонгүй.');
+	}
+
+	return organization;
+};
+
 const setOrganizationOnBody = (ctx: any, organizationId: number) => {
 	ctx.request.body = ctx.request.body ?? {};
 	ctx.request.body.data = ctx.request.body.data ?? {};
@@ -170,7 +183,58 @@ export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 		const organizationId = getOrganizationId(ctx);
 		setOrganizationOnBody(ctx, organizationId);
 		await validateBookingRelations(ctx, strapi, organizationId);
-		return await super.create(ctx);
+		const sanitizedInput = ctx.request.body.data;
+		const created = await strapi.entityService.create(MODEL_UID, {
+			data: sanitizedInput,
+			populate: {
+				organization: {
+					fields: ['id', 'name'],
+				},
+				room: {
+					fields: ['id', 'name'],
+				},
+				bed: {
+					fields: ['id', 'no', 'name'],
+				},
+			},
+		});
+
+		const sanitizedOutput = await this.sanitizeOutput(created, ctx);
+		return this.transformResponse(sanitizedOutput);
+	},
+
+	async createPublic(ctx) {
+		ctx.request.body = ctx.request.body ?? {};
+		ctx.request.body.data = ctx.request.body.data ?? {};
+		const data = ctx.request.body.data;
+
+		const organizationId = toNumericId(data.organization);
+		if (!organizationId) {
+			ctx.throw(400, 'Байгууллагын ID шаардлагатай.');
+		}
+
+		await ensureOrganizationExists(ctx, strapi, organizationId);
+		setOrganizationOnBody(ctx, organizationId);
+		await validateBookingRelations(ctx, strapi, organizationId);
+
+		const sanitizedInput = ctx.request.body.data;
+		const created = await strapi.entityService.create(MODEL_UID, {
+			data: sanitizedInput,
+			populate: {
+				organization: {
+					fields: ['id', 'name'],
+				},
+				room: {
+					fields: ['id', 'name'],
+				},
+				bed: {
+					fields: ['id', 'no', 'name'],
+				},
+			},
+		});
+
+		const sanitizedOutput = await this.sanitizeOutput(created, ctx);
+		return this.transformResponse(sanitizedOutput);
 	},
 
 	async update(ctx) {
