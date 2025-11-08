@@ -11,6 +11,12 @@
   },
   "pluginOptions": {},
   "attributes": {
+    "organization": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::organization.organization",
+      "inversedBy": "rooms"
+    },
     "name": {
       "type": "string",
       "minLength": 2,

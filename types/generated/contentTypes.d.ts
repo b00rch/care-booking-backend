@@ -603,6 +603,7 @@ export interface ApiOrganizationOrganization
         minLength: 6;
       }>;
     publishedAt: Schema.Attribute.DateTime;
+    rooms: Schema.Attribute.Relation<'oneToMany', 'api::room.room'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -637,6 +638,10 @@ export interface ApiRoomRoom extends Struct.CollectionTypeSchema {
         maxLength: 30;
         minLength: 2;
       }>;
+    organization: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::organization.organization'
+    >;
     pricePerDay: Schema.Attribute.Integer & Schema.Attribute.Required;
     priceWelfare: Schema.Attribute.Integer;
     publishedAt: Schema.Attribute.DateTime;
