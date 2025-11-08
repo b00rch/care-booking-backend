@@ -87,12 +87,35 @@
       }
     },
     "pricePerDay": {
-      "type": "integer",
-      "required": true
+      "type": "integer"
     },
     "priceTotal": {
+      "type": "integer"
+    },
+    "state": {
+      "type": "enumeration",
+      "required": true,
+      "default": "new",
+      "enum": [
+        "new",
+        "pending",
+        "confirmed",
+        "cancelled",
+        "completed"
+      ]
+    },
+    "depositAmount": {
       "type": "integer",
-      "required": true
+      "default": 0,
+      "min": 0
+    },
+    "completionReason": {
+      "type": "enumeration",
+      "enum": [
+        "service_completed",
+        "deposit_refunded",
+        "auto_expired"
+      ]
     }
   }
 }

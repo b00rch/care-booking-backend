@@ -511,9 +511,20 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
     age: Schema.Attribute.Integer;
     bed: Schema.Attribute.Relation<'oneToOne', 'api::bed.bed'>;
     birthday: Schema.Attribute.Date;
+    completionReason: Schema.Attribute.Enumeration<
+      ['service_completed', 'deposit_refunded', 'auto_expired']
+    >;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    depositAmount: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
     endDay: Schema.Attribute.Date & Schema.Attribute.Required;
     firstName: Schema.Attribute.String &
       Schema.Attribute.Required &
@@ -547,8 +558,8 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
         maxLength: 20;
         minLength: 6;
       }>;
-    pricePerDay: Schema.Attribute.Integer & Schema.Attribute.Required;
-    priceTotal: Schema.Attribute.Integer & Schema.Attribute.Required;
+    pricePerDay: Schema.Attribute.Integer;
+    priceTotal: Schema.Attribute.Integer;
     publishedAt: Schema.Attribute.DateTime;
     registerNo: Schema.Attribute.String &
       Schema.Attribute.SetMinMaxLength<{
@@ -557,6 +568,11 @@ export interface ApiBookingBooking extends Struct.CollectionTypeSchema {
       }>;
     room: Schema.Attribute.Relation<'oneToOne', 'api::room.room'>;
     startDay: Schema.Attribute.Date & Schema.Attribute.Required;
+    state: Schema.Attribute.Enumeration<
+      ['new', 'pending', 'confirmed', 'cancelled', 'completed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'new'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;

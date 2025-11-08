@@ -9,6 +9,60 @@ const ORGANIZATION_MODEL_UID = 'api::organization.organization';
 const ROOM_MODEL_UID = 'api::room.room';
 const BED_MODEL_UID = 'api::bed.bed';
 
+const BOOKING_STATES = ['new', 'pending', 'confirmed', 'cancelled', 'completed'] as const;
+type BookingState = (typeof BOOKING_STATES)[number];
+
+const COMPLETION_REASONS = ['service_completed', 'deposit_refunded', 'auto_expired'] as const;
+type CompletionReason = (typeof COMPLETION_REASONS)[number];
+
+const normalizeState = (value: unknown): BookingState | undefined => {
+	if (typeof value !== 'string') return undefined;
+	const lower = value.toLowerCase();
+	return BOOKING_STATES.find((state) => state === lower);
+};
+
+const normalizeCompletionReason = (value: unknown): CompletionReason | undefined => {
+	if (typeof value !== 'string') return undefined;
+	const lower = value.toLowerCase();
+	return COMPLETION_REASONS.find((reason) => reason === lower);
+};
+
+const toNonNegativeInteger = (value: unknown): number | undefined => {
+	if (value == null) return undefined;
+	const numeric = Number(value);
+	if (!Number.isFinite(numeric)) return undefined;
+	return Math.max(0, Math.round(numeric));
+};
+
+const prepareBookingData = (data: Record<string, unknown> | undefined, fallbackState?: BookingState) => {
+	if (!data || typeof data !== 'object') return;
+	const stateCandidate = normalizeState((data as { state?: unknown }).state ?? (data as { status?: unknown }).status);
+	if ('status' in (data as { status?: unknown })) {
+		delete (data as { status?: unknown }).status;
+	}
+	if (stateCandidate) {
+		(data as { state: BookingState }).state = stateCandidate;
+	} else if (fallbackState) {
+		(data as { state: BookingState }).state = fallbackState;
+	} else {
+		delete (data as { state?: unknown }).state;
+	}
+
+	if ('depositAmount' in data) {
+		const deposit = toNonNegativeInteger((data as { depositAmount?: unknown }).depositAmount);
+		(data as { depositAmount?: number }).depositAmount = deposit ?? 0;
+	} else if (fallbackState) {
+		(data as { depositAmount?: number }).depositAmount = 0;
+	}
+
+	if ('completionReason' in data) {
+		const reason = normalizeCompletionReason((data as { completionReason?: unknown }).completionReason);
+		(data as { completionReason?: CompletionReason | null }).completionReason = reason ?? null;
+	} else if (fallbackState) {
+		(data as { completionReason?: CompletionReason | null }).completionReason = null;
+	}
+};
+
 const toNumericId = (value: unknown): number | undefined => {
 	if (value == null) {
 		return undefined;
@@ -183,9 +237,10 @@ export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 		const organizationId = getOrganizationId(ctx);
 		setOrganizationOnBody(ctx, organizationId);
 		await validateBookingRelations(ctx, strapi, organizationId);
-		const sanitizedInput = ctx.request.body.data;
+		prepareBookingData(ctx.request.body.data, 'pending');
+		const sanitizedInput = await this.sanitizeInput(ctx.request.body.data, ctx);
 		const created = await strapi.entityService.create(MODEL_UID, {
-			data: sanitizedInput,
+			data: sanitizedInput as any,
 			populate: {
 				organization: {
 					fields: ['id', 'name'],
@@ -216,10 +271,10 @@ export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 		await ensureOrganizationExists(ctx, strapi, organizationId);
 		setOrganizationOnBody(ctx, organizationId);
 		await validateBookingRelations(ctx, strapi, organizationId);
-
-		const sanitizedInput = ctx.request.body.data;
+		prepareBookingData(ctx.request.body.data, 'new');
+		const sanitizedInput = await this.sanitizeInput(ctx.request.body.data, ctx);
 		const created = await strapi.entityService.create(MODEL_UID, {
-			data: sanitizedInput,
+			data: sanitizedInput as any,
 			populate: {
 				organization: {
 					fields: ['id', 'name'],
@@ -243,6 +298,7 @@ export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 		await ensureBookingOwnership(ctx, strapi, bookingId, organizationId);
 		setOrganizationOnBody(ctx, organizationId);
 		await validateBookingRelations(ctx, strapi, organizationId);
+		prepareBookingData(ctx.request.body.data);
 		return await super.update(ctx);
 	},
 
