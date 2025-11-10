@@ -124,6 +124,22 @@ const ensureBookingOwnership = (ctx: any, booking: any, organizationId: number) 
 	return booking;
 };
 
+const appendFilter = (ctx: any, filter: Record<string, unknown>) => {
+	ctx.query = ctx.query ?? {};
+	const existing = ctx.query.filters;
+	if (!existing) {
+		ctx.query.filters = filter;
+		return;
+	}
+	if (existing.$and && Array.isArray(existing.$and)) {
+		existing.$and.push(filter);
+		return;
+	}
+	ctx.query.filters = {
+		$and: [existing, filter],
+	};
+};
+
 const resolveBookingParam = async (ctx: any, strapi: any) => {
 	const rawId = ctx.params?.id;
 	if (!rawId) {
@@ -251,7 +267,94 @@ export default factories.createCoreController(MODEL_UID, ({ strapi }) => ({
 	async find(ctx) {
 		const organizationId = getOrganizationId(ctx);
 		enforceOrganizationFilter(ctx, organizationId);
-		return await super.find(ctx);
+
+		const cursorRaw = typeof ctx.request?.query?.cursor === 'string'
+			? ctx.request.query.cursor
+			: typeof ctx.query?.cursor === 'string'
+				? ctx.query.cursor
+				: undefined;
+		const cursorIdRaw = ctx.request?.query?.cursorId ?? ctx.query?.cursorId;
+		const limitRaw = ctx.request?.query?.limit ?? ctx.query?.limit;
+		const rangeStartRaw = typeof ctx.request?.query?.rangeStart === 'string'
+			? ctx.request.query.rangeStart
+			: typeof ctx.query?.rangeStart === 'string'
+				? ctx.query.rangeStart
+				: undefined;
+		const rangeEndRaw = typeof ctx.request?.query?.rangeEnd === 'string'
+			? ctx.request.query.rangeEnd
+			: typeof ctx.query?.rangeEnd === 'string'
+				? ctx.query.rangeEnd
+				: undefined;
+
+		const cursorDate = cursorRaw ? new Date(cursorRaw) : undefined;
+		const cursorId = toNumericId(cursorIdRaw);
+		const cursorIso = cursorDate && !Number.isNaN(cursorDate.valueOf()) ? cursorDate.toISOString() : undefined;
+
+		if (cursorIso) {
+			if (cursorId) {
+				appendFilter(ctx, {
+					$or: [
+						{ createdAt: { $lt: cursorIso } },
+						{ createdAt: cursorIso, id: { $lt: cursorId } },
+					],
+				});
+			} else {
+				appendFilter(ctx, { createdAt: { $lt: cursorIso } });
+			}
+		}
+
+		const normalizedRangeStart = typeof rangeStartRaw === 'string' && rangeStartRaw ? rangeStartRaw : undefined;
+		const normalizedRangeEnd = typeof rangeEndRaw === 'string' && rangeEndRaw ? rangeEndRaw : undefined;
+
+		if (normalizedRangeStart) {
+			appendFilter(ctx, {
+				endDay: {
+					$gte: normalizedRangeStart,
+				},
+			});
+		}
+
+		if (normalizedRangeEnd) {
+			appendFilter(ctx, {
+				startDay: {
+					$lte: normalizedRangeEnd,
+				},
+			});
+		}
+
+		const limitNumeric = (() => {
+			const parsed = Number(limitRaw);
+			if (!Number.isFinite(parsed) || parsed <= 0) return 50;
+			return Math.min(200, Math.round(parsed));
+		})();
+
+		ctx.query = ctx.query ?? {};
+		ctx.query.pagination = {
+			start: 0,
+			limit: limitNumeric,
+		};
+
+		if (!ctx.query.sort) {
+			ctx.query.sort = ['createdAt:desc', 'id:desc'];
+		}
+
+		const response = await super.find(ctx);
+		const rows = Array.isArray(response?.data) ? response.data : [];
+		const lastEntry = rows.length === limitNumeric ? rows[rows.length - 1] : undefined;
+		const lastAttributes = lastEntry?.attributes ?? {};
+		const nextCursor = lastEntry && lastAttributes?.createdAt
+			? {
+				createdAt: lastAttributes.createdAt,
+				id: String(lastEntry.id ?? ''),
+			}
+			: null;
+
+		response.meta = {
+			...(response.meta ?? {}),
+			nextCursor,
+		};
+
+		return response;
 	},
 
 	async findOne(ctx) {
