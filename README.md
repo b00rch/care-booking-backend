@@ -2,11 +2,22 @@
 
 Strapi comes with a full featured [Command Line Interface](https://docs.strapi.io/dev-docs/cli) (CLI) which lets you scaffold and manage your project in seconds.
 
+## 🐳 Docker quick start
+
+1. Copy `.env.docker.example` to `.env.docker` and replace the placeholder secrets (`APP_KEYS`, `JWT_SECRET`, etc).
+2. From the `care-booking-backend` folder run `docker compose up --build`.
+3. Once the build finishes the Strapi admin will be available at <http://localhost:1337>.
+
+The compose stack provisions a PostgreSQL database and keeps Strapi uploads in a named docker volume (`strapi-uploads`).
+To reset everything remove the containers and volumes with `docker compose down -v`.
+
+---
+
 ### `develop`
 
 Start your Strapi application with autoReload enabled. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-develop)
 
-```
+```bash
 npm run develop
 # or
 yarn develop
@@ -16,7 +27,7 @@ yarn develop
 
 Start your Strapi application with autoReload disabled. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-start)
 
-```
+```bash
 npm run start
 # or
 yarn start
@@ -26,7 +37,7 @@ yarn start
 
 Build your admin panel. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-build)
 
-```
+```bash
 npm run build
 # or
 yarn build
@@ -36,7 +47,7 @@ yarn build
 
 Strapi gives you many possible deployment options for your project including [Strapi Cloud](https://cloud.strapi.io). Browse the [deployment section of the documentation](https://docs.strapi.io/dev-docs/deployment) to find the best solution for your use case.
 
-```
+```bash
 yarn strapi deploy
 ```
 
