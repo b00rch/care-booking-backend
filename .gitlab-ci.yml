@@ -7,9 +7,14 @@ services:
 variables:
   DOCKER_TLS_CERTDIR: ""
   DOCKER_DRIVER: overlay2
+  AWS_DEFAULT_REGION: ap-southeast-1
+  AWS_ACCOUNT_ID: $CI_AWS_ACCOUNT_ID
+  ECR_REPOSITORY: care-booking-backend
+  ECR_REGISTRY: "$CI_AWS_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com"
 
 stages:
   - build
+  - deploy
 
 build_strapi_image:
   stage: build
@@ -28,3 +33,20 @@ build_strapi_image:
         --tag "$CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}" \
         --file Dockerfile \
         .
+
+push_to_ecr:
+  stage: deploy
+  needs:
+    - job: build_strapi_image
+      artifacts: false
+  rules:
+    - if: "$CI_COMMIT_BRANCH == 'main'"
+  before_script:
+    - apk add --no-cache aws-cli
+    - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+    - docker pull "$CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}"
+  script:
+    - docker tag "$CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}" "$ECR_REGISTRY/$ECR_REPOSITORY:${CI_COMMIT_SHORT_SHA}"
+    - docker tag "$CI_REGISTRY_IMAGE:${CI_COMMIT_SHORT_SHA}" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+    - docker push "$ECR_REGISTRY/$ECR_REPOSITORY:${CI_COMMIT_SHORT_SHA}"
+    - docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"

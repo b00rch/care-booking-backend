@@ -125,10 +125,12 @@ coverage
 ############################
 
 .env
+.env.prod
 license.txt
 exports
 .strapi
 dist
 build
+deployments
 .strapi-updater.json
 .strapi-cloud.json
