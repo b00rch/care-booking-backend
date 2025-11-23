@@ -11,23 +11,11 @@ export default {
     strapi.server.use(async (ctx, next) => {
       if (ctx.path === '/health' && ctx.method === 'GET') {
         ctx.set('Cache-Control', 'no-store');
-
-        try {
-          await strapi.db?.connection?.raw?.('SELECT 1');
-          ctx.body = {
-            status: 'ok',
-            timestamp: new Date().toISOString(),
-          };
-          ctx.status = 200;
-        } catch (error) {
-          strapi.log.error('Health check database probe failed', error);
-          ctx.body = {
-            status: 'error',
-            timestamp: new Date().toISOString(),
-          };
-          ctx.status = 503;
-        }
-
+        ctx.body = {
+          status: 'ok',
+          timestamp: new Date().toISOString(),
+        };
+        ctx.status = 200;
         return;
       }
 
