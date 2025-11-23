@@ -3,8 +3,8 @@ export default ({ env }) => ({
     secret: env('ADMIN_JWT_SECRET'),
     sessions: {
       enabled: true,
-      maxSessionLifespan: env('ADMIN_SESSION_MAX_LIFESPAN', '1d'),
-      maxRefreshTokenLifespan: env('ADMIN_SESSION_MAX_REFRESH_LIFESPAN', '7d'),
+      maxSessionLifespan: env.int('ADMIN_SESSION_MAX_LIFESPAN', 24 * 60 * 60 * 1000),
+      maxRefreshTokenLifespan: env.int('ADMIN_SESSION_MAX_REFRESH_LIFESPAN', 7 * 24 * 60 * 60 * 1000),
     },
   },
   apiToken: {
