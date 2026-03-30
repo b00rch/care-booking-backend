@@ -1,4 +1,5 @@
 // import type { Core } from '@strapi/strapi';
+import { seed } from './seed';
 
 export default {
   /**
@@ -30,5 +31,11 @@ export default {
    * This gives you an opportunity to set up your data model,
    * run jobs, or perform some special logic.
    */
-  bootstrap(/* { strapi }: { strapi: Core.Strapi } */) { },
+  async bootstrap({ strapi }) {
+    try {
+      await seed(strapi);
+    } catch (error) {
+      strapi.log.error('Seed failed:', error);
+    }
+  },
 };
