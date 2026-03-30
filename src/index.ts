@@ -10,7 +10,19 @@ export default {
    */
   register({ strapi }) {
     strapi.server.use(async (ctx, next) => {
-      if (ctx.path === '/health' && ctx.method === 'GET') {
+      if (ctx.path === '/health' && (ctx.method === 'GET' || ctx.method === 'OPTIONS')) {
+        const origin = ctx.get('Origin');
+        if (origin) {
+          ctx.set('Access-Control-Allow-Origin', origin);
+          ctx.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+          ctx.set('Access-Control-Allow-Headers', 'Content-Type');
+        }
+
+        if (ctx.method === 'OPTIONS') {
+          ctx.status = 204;
+          return;
+        }
+
         ctx.set('Cache-Control', 'no-store');
         ctx.body = {
           status: 'ok',
