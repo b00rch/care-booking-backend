@@ -37,5 +37,6 @@ export default {
     } catch (error) {
       strapi.log.error('Seed failed:', error);
     }
+
   },
 };

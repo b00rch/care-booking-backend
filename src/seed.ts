@@ -1,6 +1,8 @@
 /**
  * Database seed script
  * Creates: roles, permissions, organization, users, rooms, beds
+ * Each table is seeded independently — skips if data already exists,
+ * reads from previously seeded tables to resolve relations.
  *
  * Roles:
  *   - "Admin" (type: "admin") — full access including room/bed management
@@ -67,27 +69,41 @@ const AUTH_COMMON_PERMISSIONS = [
   'plugin::users-permissions.user.me',
 ];
 
-// 30 rooms, 75 beds total
-// Rooms 1-15: 3 beds each = 45
-// Rooms 16-30: 2 beds each = 30
 const ROOM_COUNT = 30;
-const BEDS_PER_ROOM_HIGH = 3;
-const BEDS_PER_ROOM_LOW = 2;
+const BEDS_PER_ROOM_HIGH = 3; // rooms 1-15
+const BEDS_PER_ROOM_LOW = 2;  // rooms 16-30
 const HIGH_BED_ROOM_COUNT = 15;
 
 export async function seed(strapi) {
-  const orgCount = await strapi.db.query('api::organization.organization').count();
-  if (orgCount > 0) {
-    strapi.log.info('Seed: Database already has data, skipping seed.');
-    return;
+  strapi.log.info('Seed: Checking each table...');
+
+  // 1. Roles & permissions (always ensure)
+  const { adminRole, authenticatedRole } = await seedRolesAndPermissions(strapi);
+
+  // 2. Organization
+  const org = await seedOrganization(strapi);
+
+  // 3. Users (needs org + roles)
+  await seedUsers(strapi, org.id, adminRole.id, authenticatedRole.id);
+
+  // 4. Rooms (needs org)
+  await seedRooms(strapi, org.id);
+
+  // 5. Beds (needs rooms)
+  await seedBeds(strapi);
+
+  strapi.log.info('Seed: Done.');
+}
+
+// ── Organization ──
+
+async function seedOrganization(strapi) {
+  const existing = await strapi.db.query('api::organization.organization').findOne({});
+  if (existing) {
+    strapi.log.info(`Seed: Organization exists (id: ${existing.id}), skipping.`);
+    return existing;
   }
 
-  strapi.log.info('Seed: Starting database seed...');
-
-  // 1. Setup roles & permissions
-  const { adminRole, authenticatedRole } = await setupRolesAndPermissions(strapi);
-
-  // 2. Create organization
   const org = await strapi.db.query('api::organization.organization').create({
     data: {
       name: 'Баатарван Амралт сувилал',
@@ -97,11 +113,21 @@ export async function seed(strapi) {
     },
   });
   strapi.log.info(`Seed: Organization created: ${org.name} (id: ${org.id})`);
+  return org;
+}
 
-  // 3. Create users
+// ── Users ──
+
+async function seedUsers(strapi, orgId: number, adminRoleId: number, staffRoleId: number) {
+  const userCount = await strapi.db.query('plugin::users-permissions.user').count();
+  if (userCount > 0) {
+    strapi.log.info(`Seed: Users exist (${userCount}), skipping.`);
+    return;
+  }
+
   const hashPassword = strapi.plugin('users-permissions').service('user').hashPassword;
 
-  const adminUser = await strapi.db.query('plugin::users-permissions.user').create({
+  await strapi.db.query('plugin::users-permissions.user').create({
     data: {
       username: 'admin',
       email: 'admin@eldercare.mn',
@@ -109,13 +135,13 @@ export async function seed(strapi) {
       confirmed: true,
       blocked: false,
       provider: 'local',
-      role: adminRole.id,
-      organization: org.id,
+      role: adminRoleId,
+      organization: orgId,
     },
   });
-  strapi.log.info(`Seed: Admin user created: ${adminUser.email} (role: Admin)`);
+  strapi.log.info('Seed: Admin user created: admin@eldercare.mn');
 
-  const workerUser = await strapi.db.query('plugin::users-permissions.user').create({
+  await strapi.db.query('plugin::users-permissions.user').create({
     data: {
       username: 'worker',
       email: 'worker@eldercare.mn',
@@ -123,26 +149,59 @@ export async function seed(strapi) {
       confirmed: true,
       blocked: false,
       provider: 'local',
-      role: authenticatedRole.id,
-      organization: org.id,
+      role: staffRoleId,
+      organization: orgId,
     },
   });
-  strapi.log.info(`Seed: Worker user created: ${workerUser.email} (role: Authenticated/Staff)`);
+  strapi.log.info('Seed: Worker user created: worker@eldercare.mn');
+}
 
-  // 4. Create rooms and beds
-  let totalBeds = 0;
+// ── Rooms ──
+
+async function seedRooms(strapi, orgId: number) {
+  const roomCount = await strapi.db.query('api::room.room').count();
+  if (roomCount > 0) {
+    strapi.log.info(`Seed: Rooms exist (${roomCount}), skipping.`);
+    return;
+  }
+
   for (let i = 1; i <= ROOM_COUNT; i++) {
-    const room = await strapi.db.query('api::room.room').create({
+    await strapi.db.query('api::room.room').create({
       data: {
         name: `${i}-р өрөө`,
         pricePerDay: 50000,
         priceWelfare: 30000,
-        organization: org.id,
+        organization: orgId,
       },
     });
+  }
+  strapi.log.info(`Seed: Created ${ROOM_COUNT} rooms`);
+}
 
-    const bedCount = i <= HIGH_BED_ROOM_COUNT ? BEDS_PER_ROOM_HIGH : BEDS_PER_ROOM_LOW;
-    for (let b = 1; b <= bedCount; b++) {
+// ── Beds ──
+
+async function seedBeds(strapi) {
+  const bedCount = await strapi.db.query('api::bed.bed').count();
+  if (bedCount > 0) {
+    strapi.log.info(`Seed: Beds exist (${bedCount}), skipping.`);
+    return;
+  }
+
+  // Read rooms from DB to get their IDs
+  const rooms = await strapi.db.query('api::room.room').findMany({
+    orderBy: { id: 'asc' },
+  });
+
+  if (rooms.length === 0) {
+    strapi.log.warn('Seed: No rooms found, cannot create beds.');
+    return;
+  }
+
+  let totalBeds = 0;
+  for (let i = 0; i < rooms.length; i++) {
+    const room = rooms[i];
+    const count = i < HIGH_BED_ROOM_COUNT ? BEDS_PER_ROOM_HIGH : BEDS_PER_ROOM_LOW;
+    for (let b = 1; b <= count; b++) {
       await strapi.db.query('api::bed.bed').create({
         data: {
           name: `${b}-р ор`,
@@ -153,10 +212,10 @@ export async function seed(strapi) {
       totalBeds++;
     }
   }
-  strapi.log.info(`Seed: Created ${ROOM_COUNT} rooms, ${totalBeds} beds`);
-
-  strapi.log.info('Seed: Database seed completed successfully!');
+  strapi.log.info(`Seed: Created ${totalBeds} beds across ${rooms.length} rooms`);
 }
+
+// ── Roles & Permissions ──
 
 async function setPermissions(strapi, roleId: number, actions: string[]) {
   for (const action of actions) {
@@ -171,8 +230,7 @@ async function setPermissions(strapi, roleId: number, actions: string[]) {
   }
 }
 
-async function setupRolesAndPermissions(strapi) {
-  // Get built-in roles
+async function seedRolesAndPermissions(strapi) {
   const publicRole = await strapi.db
     .query('plugin::users-permissions.role')
     .findOne({ where: { type: 'public' } });
@@ -185,7 +243,7 @@ async function setupRolesAndPermissions(strapi) {
     throw new Error('Default roles (public/authenticated) not found');
   }
 
-  // Create "Admin" role
+  // Create or find "Admin" role
   let adminRole = await strapi.db
     .query('plugin::users-permissions.role')
     .findOne({ where: { type: 'admin' } });
@@ -201,15 +259,11 @@ async function setupRolesAndPermissions(strapi) {
     strapi.log.info(`Seed: Admin role created (id: ${adminRole.id})`);
   }
 
-  // Set permissions for each role
+  // Ensure permissions (idempotent — skips existing)
   await setPermissions(strapi, publicRole.id, PUBLIC_PERMISSIONS);
-  strapi.log.info(`Seed: Public permissions set (${PUBLIC_PERMISSIONS.length})`);
-
   await setPermissions(strapi, authenticatedRole.id, [...STAFF_PERMISSIONS, ...AUTH_COMMON_PERMISSIONS]);
-  strapi.log.info(`Seed: Authenticated/Staff permissions set (${STAFF_PERMISSIONS.length + AUTH_COMMON_PERMISSIONS.length})`);
-
   await setPermissions(strapi, adminRole.id, [...ADMIN_PERMISSIONS, ...AUTH_COMMON_PERMISSIONS]);
-  strapi.log.info(`Seed: Admin permissions set (${ADMIN_PERMISSIONS.length + AUTH_COMMON_PERMISSIONS.length})`);
+  strapi.log.info('Seed: Roles & permissions ensured.');
 
   return { publicRole, authenticatedRole, adminRole };
 }
